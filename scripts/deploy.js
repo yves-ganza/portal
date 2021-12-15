@@ -3,7 +3,9 @@ const main = async () => {
     const balance = await admin.getBalance()
     
     const contractFactory = await hre.ethers.getContractFactory('VibinPortal')
-    let contract = await contractFactory.deploy()
+    let contract = await contractFactory.deploy({
+        value: hre.ethers.utils.parseEther('1')
+    })
     contract = await contract.deployed()
 
     console.log(`Smart contract deployed to: ${contract.address}`)

@@ -6,65 +6,105 @@ import "hardhat/console.sol";
 
 contract VibinPortal {
 
+    uint256 private seed;
+
+    struct Avatar {
+        string path;
+        string cid;
+        uint size;
+    }
+
     struct User {
         string username;
         uint timeStamp;
+        Avatar profilePic;
+        uint rank;
     }
 
     struct Vibe {
         address owner;
+        string username;
         string message;
         uint timestamp;
+        uint upvotes;
+        uint downvotes;
     }
 
     mapping(address => User) addressToUser;
+    mapping(address => uint256) lastVibed;
+
     Vibe[] vibes;
     uint256 userCount;
 
     address immutable admin;
 
-    constructor(){
-        console.log("Constructor...");
+    constructor() payable{
         admin = msg.sender;
+        seed = (block.timestamp + block.difficulty) % 100;
     }
 
-    function join(string memory _username) public returns(bool){
+    modifier onlyRegistered {
         string memory username = addressToUser[msg.sender].username;
-        bool alreadyRegistered = bytes(username).length == bytes('').length;
+        bool isRegistered = bytes(username).length != bytes('').length;
+        require(isRegistered || msg.sender == admin, 'error: Not authorized');
+        _;
+    }
 
-        require(alreadyRegistered, 'error: User already registered');
+    function join(string memory _username, Avatar memory _avtr) public returns(bool){
+        string memory username = addressToUser[msg.sender].username;
+        bool alreadyRegistered = bytes(username).length != bytes('').length;
 
-        User memory newUser = User(_username, block.timestamp);
+        require(!alreadyRegistered, 'error: User already registered');
+
+        User memory newUser = User(_username, block.timestamp, _avtr, 0);
         addressToUser[msg.sender] = newUser;
-        console.log('%s joined!', addressToUser[msg.sender].username);
+
         userCount += 1;
         return true;
     }
 
-    function vibe(string memory _message) public{
+    function hasJoined() public view returns(bool){
         string memory username = addressToUser[msg.sender].username;
-        bool alreadyRegistered = bytes(username).length != bytes('').length;
+        bool isRegistered = bytes(username).length != bytes('').length;
 
-        require(alreadyRegistered || msg.sender == admin,'error: User not registered');
+        return isRegistered;
+    }
 
+    function getUser() public view returns(User memory){
+        return addressToUser[msg.sender];
+    }
+
+    function vibe(string memory _message) payable onlyRegistered public{
+        
+        string memory username = addressToUser[msg.sender].username;
+        
         Vibe memory newVibe = Vibe(
             msg.sender,
+            username,
             _message,
-            block.timestamp
+            block.timestamp,
+            0,
+            0
         );
 
         vibes.push(newVibe);
-        console.log('%s  just vibed with you', msg.sender);
+
+        if(seed <= 50){
+            require(lastVibed[msg.sender] + 15 minutes < block.timestamp, 'Too many requests');
+            lastVibed[msg.sender] = block.timestamp;
+            
+            uint256 prize = 0.0001 ether;
+            require(prize < address(this).balance, 'Unsufficient funds for prize');
+            (bool success, ) = (msg.sender).call{value: prize}('');
+            require(success, 'Failed to withdraw prize funds');
+        }
     }
 
-    function getVibes() public view returns(Vibe[] memory) {
-        require(msg.sender == admin, 'error: Not authorized');
+    function getVibes() onlyRegistered public view returns(Vibe[] memory) {
         return vibes;
     }
 
-    function getUserCount() public view returns(uint256){
-        require(msg.sender == admin, 'error: Not authorized');
+    function getUserCount() onlyRegistered public view returns(uint256){
         return userCount;
     }
-
 }
